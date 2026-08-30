@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Trimmed but structurally faithful copy of a Qualcomm/AOSP
+     audio_policy_volumes.xml as shipped on SM8250-class devices. -->
+<volumes>
+    <reference name="FULL_SCALE_VOLUME_CURVE">
+        <point>0,0</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="SILENT_VOLUME_CURVE">
+        <point>0,-9600</point>
+        <point>100,-9600</point>
+    </reference>
+    <reference name="DEFAULT_SYSTEM_VOLUME_CURVE">
+        <point>1,-2400</point>
+        <point>33,-1800</point>
+        <point>66,-1200</point>
+        <point>100,-600</point>
+    </reference>
+    <reference name="DEFAULT_MEDIA_VOLUME_CURVE">
+        <!-- the curve that matters for music on speaker -->
+        <point>1,-5800</point>
+        <point>20,-4000</point>
+        <point>60,-1700</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_VOICE_VOLUME_CURVE">
+        <point>0,-4200</point>
+        <point>100,0</point>
+    </reference>
+    <reference name="DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE">
+        <point>1,-5600</point>
+        <point>20,-3700</point>
+        <point>60,-1600</point>
+        <point>100,0</point>
+    </reference>
+    <volume stream="AUDIO_STREAM_VOICE_CALL" deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_VOICE_VOLUME_CURVE"/>
+    <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+    <volume stream="AUDIO_STREAM_MUSIC" deviceCategory="DEVICE_CATEGORY_HEADSET">
+        <point>1,-2900</point>
+        <point>40,-1800</point>
+        <point>100,0</point>
+    </volume>
+    <volume stream="AUDIO_STREAM_VOICE_CALL" deviceCategory="DEVICE_CATEGORY_EARPIECE">
+        <point>0,-2700</point>
+        <point>100,0</point>
+    </volume>
+    <volume stream="AUDIO_STREAM_ALARM" deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="DEFAULT_MEDIA_VOLUME_CURVE"/>
+    <volume stream="AUDIO_STREAM_ENFORCED_AUDIBLE" deviceCategory="DEVICE_CATEGORY_SPEAKER" ref="FULL_SCALE_VOLUME_CURVE"/>
+</volumes>

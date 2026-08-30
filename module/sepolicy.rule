@@ -1,0 +1,27 @@
+# alioth-loud :: SELinux rules
+#
+# Deliberately empty of active rules.
+#
+# Layer 4b writes to smart-amplifier sysfs nodes. Whether that needs a policy
+# exception depends entirely on the label the kernel gives those nodes, which
+# differs per driver (aw882xx, cs35l41, tfa98xx all label differently) and per
+# ROM. Guessing means either a rule that does nothing, or a rule far broader
+# than necessary.
+#
+# The probe script captures the labels. Once we know them, the correct rule is
+# narrow, e.g. for an Awinic amp exposing nodes as sysfs_aw882xx:
+#
+#     allow magisk sysfs_aw882xx dir  { search }
+#     allow magisk sysfs_aw882xx file { open read write getattr }
+#
+# and on KernelSU/APatch the source domain is su rather than magisk:
+#
+#     allow su sysfs_aw882xx file { open read write getattr }
+#
+# Do not replace these with `allow magisk sysfs file *`. That grants write
+# access to every sysfs node on the device for the lifetime of the module,
+# which is a much bigger hole than this feature warrants.
+#
+# If layer 4b logs "write failed (selinux?)", get the label with:
+#     ls -Z <node>
+# and add the matching narrow rule here.

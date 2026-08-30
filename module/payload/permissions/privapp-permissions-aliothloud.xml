@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  alioth-loud :: privileged permission allowlist
+
+  Android refuses to boot a priv-app that requests signature|privileged
+  permissions which are not allowlisted here (it throws in
+  PermissionManagerService and can trigger a boot failure), so this file must
+  stay in sync with the app manifest.
+
+  MODIFY_DEFAULT_AUDIO_EFFECTS is the one that matters. AudioFlinger's
+  createEffect() gates AUDIO_SESSION_OUTPUT_MIX (session 0) behind
+  modifyDefaultAudioEffectsAllowed(). Without it the app can only attach
+  DynamicsProcessing to its own session, which boosts nothing but itself.
+-->
+<permissions>
+    <privapp-permissions package="com.f3.aliothloud">
+        <permission name="android.permission.MODIFY_DEFAULT_AUDIO_EFFECTS"/>
+        <permission name="android.permission.MODIFY_AUDIO_ROUTING"/>
+        <permission name="android.permission.MODIFY_AUDIO_SETTINGS_PRIVILEGED"/>
+    </privapp-permissions>
+</permissions>

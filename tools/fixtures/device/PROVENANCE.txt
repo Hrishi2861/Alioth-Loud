@@ -1,0 +1,17 @@
+Real files pulled from the target device, used as test fixtures.
+
+  device   aliothin (Redmi K40 / Mi 11X / POCO F3, M2012K11AI)
+  soc      SM8250 / kona
+  rom      OS1.0.10.0.TKHCNXM  (HyperOS 1.0.10 CN, Android 13, sdk 33)
+  root     KernelSU 1.1.1, SELinux Enforcing
+  amps     2x Cirrus Logic CS35L41 rev B2, i2c 1-0040 (RCV/top) + 1-0041 (bottom)
+  card     kona-mtp-snd-card  -> HAL uses mixer_paths.xml (not _qrd / _cdp)
+
+Captured by tools/probe.sh BEFORE alioth-loud was installed, so these are
+stock/unpatched. Verified stock: default_volume_tables.xml still has the
+untouched -5800 media curve.
+
+Do not "clean up" these files. The patchers are asserted against them byte for
+byte precisely because they are real, including the odd formatting (multi-line
+<volume> elements with the ref= attribute on a continuation line, which is what
+broke my first synthetic fixture assumption).
