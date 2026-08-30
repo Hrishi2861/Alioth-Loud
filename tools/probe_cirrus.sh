@@ -58,22 +58,46 @@ log "detected syntax = ${SYNTAX:-UNKNOWN}"
 log ""
 
 # read a control every way we can, so the output is useful whichever
-# tinymix this build ships
+# tinymix this build ships.
+#
+# Control names contain spaces, so each candidate invocation is spelled out
+# explicitly rather than built in a variable -- an unquoted "$form" holding
+# "Digital PCM Volume" word-splits into three arguments, at which point tinymix
+# reads argument 2 as a value to WRITE. The first version of this script had
+# that bug and silently fell back to numeric ids, which are not stable across
+# boots (ids 5390/5385 came back as different controls entirely).
 dump_ctl() {
     name="$1"; id="$2"
     log "---- [$id] $name"
-    for form in "get $name" "get $id" "$name" "$id"; do
-        # shellcheck disable=SC2086
-        r=$($TM $form 2>&1)
+    for how in 1 2 3 4; do
+        case $how in
+            1) r=$($TM get "$name" 2>&1) ;;
+            2) r=$($TM "$name"     2>&1) ;;
+            3) r=$($TM get "$id"   2>&1) ;;
+            4) r=$($TM "$id"       2>&1) ;;
+        esac
         st=$?
         case "$r" in
-            *"nvalid"*|*"sage:"*|*"annot"*|*"ailed"*) continue ;;
+            ""|*"nvalid"*|*"sage:"*|*"annot"*|*"ailed"*) continue ;;
         esac
-        [ -z "$r" ] && continue
-        log "     (\$TM $form) rc=$st"
+        case $how in
+            1) log "     (\$TM get '$name') rc=$st" ;;
+            2) log "     (\$TM '$name') rc=$st" ;;
+            3) log "     (\$TM get $id) rc=$st  [id fallback - name lookup failed]" ;;
+            4) log "     (\$TM $id) rc=$st  [id fallback - name lookup failed]" ;;
+        esac
         echo "$r" | head -8 | sed 's/^/       /' >>"$OUT"
-        break
+        # Cross-check: when we had to use an id, confirm the control we got is
+        # the one we asked for. Ids shift between boots.
+        case $how in
+            3|4) case "$r" in
+                     *"$name"*) : ;;
+                     *) log "       !! id $id resolved to a DIFFERENT control - ignore this entry" ;;
+                 esac ;;
+        esac
+        return 0
     done
+    log "     (unreadable by name or id)"
 }
 
 # ---------------------------------------------------------------------------

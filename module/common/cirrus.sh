@@ -65,27 +65,57 @@ cirrus_get() {
         # shellcheck disable=SC2086
         r=$($CIRRUS_TM $form "$name" 2>/dev/null) || continue
         case "$r" in ""|*nvalid*|*sage:*|*annot*) continue ;; esac
-        # tinymix prints either "1841" or "Name: 1841 (range 0->2144)"
-        echo "$r" | sed -n '1s/.*: *//;1s/ *(range.*//;1p' | tr -d ' \r'
+        # tinymix prints either a bare "1841" or "Name: 1841 (dsrange 0->20)".
+        # Strip from the first '(' rather than matching "(range", because this
+        # build says "dsrange" -- anchoring on "range" left the whole suffix
+        # attached and produced "18(dsrange0->20)", which then failed the
+        # numeric check and silently disabled the layer.
+        echo "$r" | sed -n '1s/.*: *//;1s/ *(.*//;1p' | tr -d ' \r'
         return 0
     done
     return 1
 }
 
 # ---------------------------------------------------------------------------
-# parse the control's max from tinymix's own "(range lo->hi)" output.
-# Returns empty when it cannot be determined -- callers must then refuse.
+# Parse the control's range from tinymix's own output and VALIDATE it.
+#
+# Echoes "lo hi" on success, nothing on failure. Callers must refuse to write
+# when this yields nothing.
+#
+# This build of tinymix prints "dsrange", not "range":
+#     AMP PCM Gain: 18 (dsrange 0->20)                 <- sane
+#     Digital PCM Volume: 1841 (dsrange 0->-318)       <- NOT interpretable
+#
+# That second form is real, measured output. A naive ".*range ...->\(...\)"
+# capture returns -318 as the maximum, and since the current value is 1841 the
+# caller then concludes the control is already maxed and skips it -- safe by
+# luck, wrong by reasoning, and it hides the fact that we do not understand the
+# control. The CS35L41's AMP_VOL_PCM is a signed field with a TLV dB scale, so
+# what the kernel reports as a "max" here is not a raw ceiling we can add to.
+#
+# Rule: hi must be numeric and strictly greater than lo, or we do not know the
+# range and must not write.
 # ---------------------------------------------------------------------------
-cirrus_range_max() {
+cirrus_range() {
     name="$1"
     for form in "get" ""; do
         # shellcheck disable=SC2086
         r=$($CIRRUS_TM $form "$name" 2>/dev/null) || continue
-        case "$r" in
-            *range*)
-                echo "$r" | sed -n 's/.*range *\([-0-9]*\) *-> *\([-0-9]*\).*/\2/p' | head -1
-                return 0 ;;
-        esac
+        case "$r" in *range*) ;; *) continue ;; esac
+
+        lo=$(echo "$r" | sed -n 's/.*range *\(-\{0,1\}[0-9]\{1,\}\)[ ]*->.*/\1/p'          | head -1)
+        hi=$(echo "$r" | sed -n 's/.*range *-\{0,1\}[0-9]\{1,\}[ ]*->[ ]*\(-\{0,1\}[0-9]\{1,\}\).*/\1/p' | head -1)
+
+        [ -n "$lo" ] && [ -n "$hi" ] || continue
+        case "$lo$hi" in *[!0-9-]*) continue ;; esac
+
+        if [ "$hi" -le "$lo" ] 2>/dev/null; then
+            warn "layer4b: '$name' reports uninterpretable range ${lo}->${hi}"
+            warn "         (signed/TLV-scaled control, not a raw ceiling) - refusing"
+            return 1
+        fi
+        echo "$lo $hi"
+        return 0
     done
     return 1
 }
@@ -111,18 +141,15 @@ cirrus_bump() {
         ''|*[!0-9-]*) warn "layer4b: '$name' is not numeric ('$cur') - skipped"; return 1 ;;
     esac
 
-    max=$(cirrus_range_max "$name")
+    max=$(cirrus_range "$name" | awk '{print $2}')
     if [ -z "$max" ]; then
-        warn "layer4b: cannot read range for '$name' - refusing to write blind"
+        warn "layer4b: no usable range for '$name' - refusing to write blind"
         warn "         (run tools/probe_cirrus.sh and report the output)"
         return 1
     fi
-    case "$max" in
-        ''|*[!0-9-]*) warn "layer4b: bad range max '$max' for '$name' - skipped"; return 1 ;;
-    esac
 
     if [ "$cur" -ge "$max" ] 2>/dev/null; then
-        log "layer4b: '$name' already at hardware max ($cur) - nothing to gain"
+        log "layer4b: '$name' already at hardware max ($cur of $max) - nothing to gain"
         return 0
     fi
 

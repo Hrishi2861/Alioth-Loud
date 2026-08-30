@@ -1,0 +1,110 @@
+tinymix   = tinymix
+device    = aliothin
+rom       = OS1.0.10.0.TKHCNXM
+card      =  0 [konamtpsndcard ]: kona-mtp-snd-ca - kona-mtp-snd-card
+
+=== TINYMIX SYNTAX DETECTION ===
+-- '$TM --version':
+    tinymix: unrecognized option `--version'
+    tinymix [options] [control name/#] [value to set]
+        options:
+-- '$TM help':
+    Invalid mixer control: help
+detected syntax = bare-name
+
+=== CS35L41 BOTTOM / MAIN AMP (i2c 1-0041) ===
+---- [52] Digital PCM Volume
+     ($TM 52) rc=0
+       Digital PCM Volume: 1841 (dsrange 0->-318)
+---- [53] AMP PCM Gain
+     ($TM 53) rc=0
+       AMP PCM Gain: 18 (dsrange 0->20)
+---- [60] Boost Class-H Tracking Enable
+     ($TM 60) rc=0
+       Boost Class-H Tracking Enable: On
+---- [61] Boost Target Voltage
+     ($TM 61) rc=0
+       Boost Target Voltage: 0 (dsrange 0->170)
+---- [63] Class-H Head Room
+     ($TM 63) rc=0
+       Class-H Head Room: 11 (dsrange 0->127)
+---- [50] DSP1 Firmware
+     ($TM 50) rc=0
+       DSP1 Firmware: MBC/VSS MasterHiFi Tx Tx Speaker Rx Rx ANC Voice Ctrl ASR Assist Dbg Trace >Protection Diag Diag Z Misc
+
+=== CS35L41 TOP / RCV AMP (i2c 1-0040) ===
+---- [27] RCV Digital PCM Volume
+     ($TM 27) rc=0
+       RCV Digital PCM Volume: 1841 (dsrange 0->-318)
+---- [28] RCV AMP PCM Gain
+     ($TM 28) rc=0
+       RCV AMP PCM Gain: 18 (dsrange 0->20)
+---- [35] RCV Boost Class-H Tracking Enable
+     ($TM 35) rc=0
+       RCV Boost Class-H Tracking Enable: On
+---- [36] RCV Boost Target Voltage
+     ($TM 36) rc=0
+       RCV Boost Target Voltage: 0 (dsrange 0->170)
+---- [38] RCV Class-H Head Room
+     ($TM 38) rc=0
+       RCV Class-H Head Room: 11 (dsrange 0->127)
+---- [25] RCV DSP1 Firmware
+     ($TM 25) rc=0
+       RCV DSP1 Firmware: MBC/VSS MasterHiFi Tx Tx Speaker Rx Rx ANC Voice Ctrl ASR Assist Dbg Trace >Protection Diag Diag Z Misc
+
+=== CIRRUS SPEAKER PROTECTION (HAL level) ===
+---- [4161] Cirrus SP Volume Attenuation
+     ($TM 4161) rc=0
+       Cirrus SP Volume Attenuation: >0dB -18dB -24dB
+---- [4155] Cirrus SP Protection
+     ($TM 4155) rc=0
+       Cirrus SP Protection: >Disable Enable
+---- [4154] Cirrus SP
+     ($TM 4154) rc=0
+       Cirrus SP: >Config SP Disable Config SP Enable
+---- [4156] Cirrus SP Usecase
+     ($TM 4156) rc=0
+       Cirrus SP Usecase: >Music Voice Headset Handsfree
+---- [4153] Cirrus SP FBPort
+     ($TM 4153) rc=0
+       Cirrus SP FBPort: PRI_MI2S_RX SEC_MI2S_RX >TERT_MI2S_RX QUAT_MI2S_RX QUAT_TDM_RX_0 SLIMBUS_0_RX
+
+=== WCD9385 CODEC (layer 4a targets -- headset/earpiece path) ===
+---- [194] RX_RX0 Digital Volume
+     ($TM 194) rc=0
+       RX_RX0 Digital Volume: 84 (dsrange 0->124)
+---- [195] RX_RX1 Digital Volume
+     ($TM 195) rc=0
+       RX_RX1 Digital Volume: 84 (dsrange 0->124)
+---- [196] RX_RX2 Digital Volume
+     ($TM 196) rc=0
+       RX_RX2 Digital Volume: 84 (dsrange 0->124)
+---- [4189] HPHL Volume
+     ($TM 4189) rc=0
+       HPHL Volume: 20 (dsrange 0->24)
+---- [4190] HPHR Volume
+     ($TM 4190) rc=0
+       HPHR Volume: 20 (dsrange 0->24)
+---- [4169] EAR PA Gain
+     ($TM 4169) rc=0
+       EAR PA Gain: >G_6_DB G_4P5_DB G_3_DB G_1P5_DB G_0_DB G_M1P5_DB G_M3_DB G_M4P5_DB G_M6_DB G_7P5_DB G_M9_DB G_M10P5_DB G_M12_DB G_M13P5_DB G_M15_DB G_M16P5_DB G_M18_DB
+
+=== CSPL DSP PARAMS (raw byte controls -- informational only) ===
+---- [5390] DSP1X Protection cd CSPL_OVERSIGHT_GAIN
+     ($TM 5390) rc=0
+       DSP1X Protection cd CSPL_ERRORNO:  00  00  00  00
+---- [5347] RCV DSP1X Protection cd CSPL_OVERSIGHT_GAIN
+     ($TM 5347) rc=0
+       RCV DSP1X Protection cd CSPL_OVERSIGHT_GAIN:  00  10  00  00
+---- [5385] DSP1X Protection cd CSPL_ENABLE
+     ($TM 5385) rc=0
+       DSP1X Protection 400a4 DC_OFFSET_HOLD_TIME:  00  00  00  00
+---- [5346] RCV DSP1X Protection cd CSPL_TEMPERATURE
+     ($TM 5346) rc=0
+       RCV DSP1X Protection cd CSPL_TEMPERATURE:  00  0a  b0  a2
+
+=== FULL ENUM/RANGE DUMP ATTEMPT ===
+'tinymix contents' NOT supported on this build
+
+=== CURRENT SPEAKER ROUTE (for reference) ===
+amps sit on TERT_MI2S per 'Cirrus SP FBPort'; confirm the mixer is on:

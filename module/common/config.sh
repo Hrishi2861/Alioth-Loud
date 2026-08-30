@@ -96,20 +96,18 @@ DISABLE_SAFE_MEDIA_VOLUME=1
 # LAYER 4a -- WCD9385 RX digital gain     HEADSET + EARPIECE ONLY
 # ===========================================================================
 #
-# MEASURED: mixer_paths.xml sets, at global scope under "<!-- Volume controls -->",
-#     RX_RX0 Digital Volume = 84      -> HPHL  (headset left)
-#     RX_RX1 Digital Volume = 84      -> HPHR  (headset right)
-#     RX_RX2 Digital Volume = 84      -> EAR   (earpiece)
-#     WSA_RX0/WSA_RX1       = 84      -> WSA macro, UNUSED on alioth
-#   84 == 0 dB on WCD93xx, 1 step == 1 dB.
+# MEASURED from the live mixer:
+#     RX_RX0 Digital Volume = 84  (dsrange 0->124)   -> HPHL  headset left
+#     RX_RX1 Digital Volume = 84  (dsrange 0->124)   -> HPHR  headset right
+#     RX_RX2 Digital Volume = 84  (dsrange 0->124)   -> EAR   earpiece
+#     HPHL/HPHR Volume      = 20  (dsrange 0->24)    -> headset analog PA
+#     EAR PA Gain           = G_6_DB, ALREADY THE MAXIMUM of its enum
+#     WSA_RX0/1             = 84                     -> unused macro on alioth
+#   84 == 0 dB, 1 step == 1 dB, so hardware allows up to +40 dB. Do not.
 #
 # THIS DOES NOT AFFECT THE SPEAKERS. They leave via TERT_MI2S to the Cirrus
 # amps and never pass through these controls. Enable it for louder wired
-# headsets (USB-C analog accessory mode uses HPHL/HPHR) and a louder earpiece.
-#
-# WSA_RX* is deliberately not whitelisted: the WSA macro is unused here
-# (vendor.audio.feature.wsa.enable=false, no WSA amp present), so patching it
-# would be noise in the diff for zero effect.
+# headsets (USB-C analog accessory mode drives HPHL/HPHR) and earpiece.
 #
 # Risk: mixer_paths.xml is parsed by the audio HAL at init. An out-of-range
 # value crash-loops audioserver. Mitigated by backup + structural validation
@@ -122,7 +120,8 @@ MIXER_GAIN_DB=4
 
 MIXER_CTL_INCLUDE='RX_RX[0-9]+ Digital Volume'
 
-# Hard ceiling regardless of the above.
+# Hard ceiling regardless of the above. Hardware permits 124 (+40 dB); 90 is
+# +6 dB over unity, which is already the sensible limit for a digital stage.
 MIXER_CTL_ABS_MAX=90
 
 # If a stock value falls outside this window the codec is not what we measured,
@@ -136,40 +135,59 @@ MIXER_CTL_MAX_PLAUSIBLE=88
 #
 # The only layer that raises actual speaker SPL.
 #
-# MEASURED current state (both amps identical):
-#     Digital PCM Volume  = 1841      digital volume inside the amp
-#     AMP PCM Gain        = 18        class-D output stage gain
-#     Boost Class-H Tracking = On     supply tracks the signal envelope
-#     Boost Target Voltage= 0
-#     Class-H Head Room   = 11
-#     Cirrus SP Protection= Disable   HAL-level protection already off
-#     CSPL_ENABLE         = 1         but in-amp DSP protection IS running
+# MEASURED per amp (both 1-0040 "RCV"/top and 1-0041 bottom read identically):
 #
-# The amps run per-unit factory calibration (measured coil resistance and
-# resonant frequency) to keep excursion and coil temperature in spec.
-# Overriding gain defeats that. Realistic usable headroom is +3 to +6 dB;
-# past that you get distortion, then a burnt voice coil. Not recoverable in
-# software, not a warranty case.
+#   AMP PCM Gain            18   (dsrange 0->20)   <- USABLE: 2 steps left
+#   Digital PCM Volume    1841   (dsrange 0->-318) <- NOT INTERPRETABLE, refused
+#   Boost Target Voltage     0   (dsrange 0->170)  <- not touched, see below
+#   Class-H Head Room       11   (dsrange 0->127)  <- not touched
+#   Boost Class-H Tracking  On
+#   DSP1 Firmware      Protection                  <- in-amp protection running
+#
+#   Cirrus SP Protection      Disable  (of: Disable, Enable)
+#   Cirrus SP                 Config SP Disable
+#   Cirrus SP Volume Attenuation  0dB  (of: 0dB, -18dB, -24dB)
+#                                       ^ already the maximum, nothing to gain
+#   EAR PA Gain               G_6_DB    ^ already the maximum, nothing to gain
+#
+# ---------------------------------------------------------------------------
+# THE HONEST CONCLUSION FROM THOSE NUMBERS
+#
+# There is almost no untapped hardware headroom on this device. Xiaomi already
+# ships the earpiece PA at its maximum, the Cirrus attenuator at 0 dB, and the
+# class-D gain at 18 of 20. The entire remaining hardware budget is TWO STEPS
+# of AMP PCM Gain, worth roughly 1-2 dB, and spending it removes the margin the
+# amp firmware uses to protect the voice coil.
+#
+# 'Digital PCM Volume' reports 0->-318, which is not a raw ceiling -- it is a
+# signed, TLV-dB-scaled field. The module refuses to write it rather than guess
+# a format, because guessing the scale of an amplifier gain register is how
+# speakers die. Do not "fix" this by hardcoding a number.
+#
+# So: if you want a large loudness increase on speaker, it comes from layer 1
+# (compression in the app), not from here. Layer 4b is a 1-2 dB garnish with
+# real downside.
+# ---------------------------------------------------------------------------
 #
 # HOW THIS LAYER PROTECTS YOU
 #   - refuses to run without both flags below
-#   - reads each control's real range from tinymix and refuses to write if the
-#     range cannot be parsed -- it never writes blind
-#   - clamps any change to CIRRUS_MAX_HEADROOM_FRACTION_PCT of the remaining
-#     headroom, so it cannot jump to the hardware maximum
+#   - reads each control's range from tinymix and refuses to write when that
+#     range is missing or inverted -- it never writes blind
+#   - clamps any change to CIRRUS_MAX_HEADROOM_FRACTION_PCT of remaining
+#     headroom, so it cannot jump straight to the hardware maximum
 #   - saves stock values for revert on uninstall
-#
-# Still off. Run tools/probe_cirrus.sh first so the ranges are known.
 
 ENABLE_CIRRUS_GAIN=0
 I_ACCEPT_SPEAKER_DAMAGE_RISK=0
 
-# Raw mixer steps to add. Units are control steps, NOT dB -- the dB-per-step
-# mapping for these controls is not publicly documented and probe_cirrus.sh
-# has not confirmed it yet. Start at 1 and listen for distortion at high
-# volume on bass-heavy material before going further.
-CIRRUS_DIGITAL_PCM_STEPS=0
+# Raw mixer steps to add, NOT dB.
+# 'AMP PCM Gain' has exactly 2 steps of headroom (18 -> 20). At the default 50%
+# fraction below, the most that will actually be applied is +1. Set the
+# fraction to 100 if you want both steps.
 CIRRUS_AMP_GAIN_STEPS=0
+
+# Left at 0 and refused by the range check anyway; see the note above.
+CIRRUS_DIGITAL_PCM_STEPS=0
 
 # Never consume more than this percentage of a control's remaining headroom.
 CIRRUS_MAX_HEADROOM_FRACTION_PCT=50

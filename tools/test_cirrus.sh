@@ -41,6 +41,11 @@ case "${FAKE_MODE:-modern}" in
   enum)     printf '%s:\t0dB\t>0dB, -1dB, -2dB\n' "$name" ;;
   spaced)   echo "$name:   $cur   (range 0 -> 2144)" ;;
   unknown)  echo "Invalid mixer control" >&2; exit 1 ;;
+  # --- formats measured verbatim on aliothin / HyperOS 1.0.10 ---
+  dsrange)  echo "$name: $cur (dsrange 0->${FAKE_MAX:-20})" ;;
+  dsinvert) echo "$name: $cur (dsrange 0->-318)" ;;
+  dsenum)   echo "$name: >0dB -18dB -24dB" ;;
+  dsenum2)  echo "$name: >G_6_DB G_4P5_DB G_3_DB G_M18_DB" ;;
 esac
 STUB
 chmod +x "$TMP/tinymix"
@@ -72,11 +77,11 @@ done
 echo
 echo ":: layer 4b range detection"
 reset; export FAKE_MODE=modern
-eq "range max [modern]" "$(cirrus_range_max 'Digital PCM Volume')" "2144"
+eq "range max [modern]" "$(cirrus_range 'Digital PCM Volume' | awk '{print $2}')" "2144"
 reset; export FAKE_MODE=spaced
-eq "range max [spaced]" "$(cirrus_range_max 'Digital PCM Volume')" "2144"
+eq "range max [spaced]" "$(cirrus_range 'Digital PCM Volume' | awk '{print $2}')" "2144"
 reset; export FAKE_MODE=norange
-r=$(cirrus_range_max 'Digital PCM Volume' 2>/dev/null || true)
+r=$(cirrus_range 'Digital PCM Volume' 2>/dev/null || true)
 [ -z "$r" ] && ok "no range reported -> empty (caller must refuse)" \
             || bad "norange must yield empty" "got '$r'"
 
@@ -176,6 +181,58 @@ ENABLE_CIRRUS_GAIN=1 I_ACCEPT_SPEAKER_DAMAGE_RISK=1 \
   cirrus_bump 'No Such Control' 3 'nope' >/dev/null 2>&1 || true
 grep -q 'not readable' "$LOGFILE" && ok "missing control rejected safely" \
     || bad "missing control must be rejected" "$(tail -2 "$LOGFILE")"
+
+# ===========================================================================
+echo
+echo ":: REAL tinymix output formats (aliothin / HyperOS 1.0.10)"
+# ===========================================================================
+# This build prints "dsrange", not "range", and one control reports an
+# inverted range. Both strings below are verbatim from the device.
+
+reset; export FAKE_MODE=dsrange FAKE_INIT=18 FAKE_MAX=20
+eq "AMP PCM Gain value parsed"  "$(cirrus_get 'AMP PCM Gain')" "18"
+eq "dsrange max parsed"         "$(cirrus_range 'AMP PCM Gain' | awk '{print $2}')" "20"
+
+# 'Digital PCM Volume: 1841 (dsrange 0->-318)' -- hi < lo, not interpretable.
+# The old parser returned -318 as the max, concluded 1841 >= -318, and logged
+# "already at hardware max". Safe by accident, wrong by reasoning.
+reset; export FAKE_MODE=dsinvert FAKE_INIT=1841
+r=$(cirrus_range 'Digital PCM Volume' 2>/dev/null || true)
+[ -z "$r" ] && ok "inverted dsrange rejected (0->-318)" \
+            || bad "inverted dsrange must be rejected" "got '$r'"
+grep -q 'uninterpretable range' "$LOGFILE" && ok "logged why it was rejected" \
+    || bad "rejection reason not logged"
+
+reset; export FAKE_MODE=dsinvert FAKE_INIT=1841
+ENABLE_CIRRUS_GAIN=1 I_ACCEPT_SPEAKER_DAMAGE_RISK=1 \
+  cirrus_bump 'Digital PCM Volume' 20 'test' >/dev/null 2>&1 || true
+eq "no write on inverted range" "$(cat "$FAKE_STORE/Digital_PCM_Volume")" "1841"
+grep -q 'already at hardware max' "$LOGFILE" \
+    && bad "must NOT claim already-at-max on an invalid range" \
+    || ok "does not misreport invalid range as already-at-max"
+
+# AMP PCM Gain 18 of 20: only 2 steps exist. At the default 50% fraction the
+# most that may be added is 1. This is the real headroom on this hardware.
+reset; export FAKE_MODE=dsrange FAKE_INIT=18 FAKE_MAX=20
+ENABLE_CIRRUS_GAIN=1 I_ACCEPT_SPEAKER_DAMAGE_RISK=1 CIRRUS_MAX_HEADROOM_FRACTION_PCT=50 \
+  cirrus_bump 'AMP PCM Gain' 5 'ampgain' >/dev/null 2>&1
+eq "AMP PCM Gain 18 -> 19 (50% of 2 steps)" "$(cat "$FAKE_STORE/AMP_PCM_Gain")" "19"
+
+reset; export FAKE_MODE=dsrange FAKE_INIT=18 FAKE_MAX=20
+ENABLE_CIRRUS_GAIN=1 I_ACCEPT_SPEAKER_DAMAGE_RISK=1 CIRRUS_MAX_HEADROOM_FRACTION_PCT=100 \
+  cirrus_bump 'AMP PCM Gain' 5 'ampgain' >/dev/null 2>&1
+eq "AMP PCM Gain 18 -> 20 at 100% fraction" "$(cat "$FAKE_STORE/AMP_PCM_Gain")" "20"
+
+# enum controls: '>' marks the current choice. Both of these are already at
+# their maximum on this device (Cirrus SP attenuation 0dB, EAR PA G_6_DB).
+for m in dsenum dsenum2; do
+    reset; export FAKE_MODE=$m
+    ENABLE_CIRRUS_GAIN=1 I_ACCEPT_SPEAKER_DAMAGE_RISK=1 \
+      cirrus_bump 'Some Enum' 3 'enum' >/dev/null 2>&1 || true
+    grep -qE 'not numeric|no usable range' "$LOGFILE" \
+        && ok "enum format [$m] rejected safely" \
+        || bad "enum [$m] must be rejected" "$(tail -2 "$LOGFILE")"
+done
 
 echo
 printf ':: %d passed, %d failed\n' "$PASS" "$FAIL"
