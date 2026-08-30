@@ -69,7 +69,21 @@ install_priv_app() {
         -type f -exec chmod 0644 {} + 2>/dev/null
     chown -R 0:0 "$MODDIR/system/priv-app" "$MODDIR/system/etc/permissions" 2>/dev/null
 
-    log "priv-app: installed"
+    # SELinux label. Files under /system carry u:object_r:system_file:s0, and if
+    # the label is wrong PackageManager cannot scan the APK, so the app never
+    # appears and the effect layers look broken for a reason that has nothing to
+    # do with audio. Mirror the label from a real /system/priv-app entry rather
+    # than hardcoding it, falling back to system_file if that lookup fails.
+    ref=$(ls -d /system/priv-app/*/ 2>/dev/null | head -1)
+    ctx=""
+    [ -n "$ref" ] && ctx=$(ls -Zd "$ref" 2>/dev/null | awk '{print $1}')
+    case "$ctx" in
+        u:object_r:*) : ;;
+        *) ctx="u:object_r:system_file:s0" ;;
+    esac
+    chcon -R "$ctx" "$MODDIR/system/priv-app" 2>/dev/null
+    chcon -R "$ctx" "$MODDIR/system/etc/permissions" 2>/dev/null
+    log "priv-app: installed (ctx $ctx)"
 }
 install_priv_app
 

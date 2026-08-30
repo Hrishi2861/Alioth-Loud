@@ -68,19 +68,60 @@ cp -f "$ROOT/tools/probe.sh" "$ROOT/tools/probe_cirrus.sh" "$STAGE/tools/"
 
 # ------------------------------------------------------------------- app
 if [ "$WITH_APP" = 1 ]; then
-    APK=$(find "$ROOT/app" -name '*-release*.apk' -o -name '*-debug*.apk' 2>/dev/null | head -1 || true)
+    APK=$(find "$ROOT/app" -path '*/outputs/apk/release/*.apk' 2>/dev/null | head -1 || true)
+    [ -n "$APK" ] || APK=$(find "$ROOT/app" -name '*-release*.apk' 2>/dev/null | head -1 || true)
     if [ -z "$APK" ]; then
-        echo "!! --with-app given but no APK found under app/"
-        echo "   build it first, then re-run"
+        echo "!! --with-app given but no release APK found under app/"
+        echo "   cd app && ANDROID_HOME=/opt/android-sdk gradle :app:assembleRelease"
         exit 1
     fi
+
+    BT=$(ls -d /opt/android-sdk/build-tools/* 2>/dev/null | sort -V | tail -1)
+    AAPT2="$BT/aapt2"; APKSIGNER="$BT/apksigner"
+    XML="$MODULE/payload/permissions/privapp-permissions-aliothloud.xml"
+
+    # --- signature must be valid, or the priv-app simply will not install
+    if [ -x "$APKSIGNER" ]; then
+        "$APKSIGNER" verify "$APK" >/dev/null 2>&1 \
+            && echo ":: apk signature ok" \
+            || { echo "!! APK signature invalid"; exit 1; }
+    fi
+
+    # --- allowlist must cover every signature|privileged permission requested.
+    #
+    # This is not cosmetic. PermissionManagerService throws when a priv-app
+    # requests a signature|privileged permission that is not allowlisted, and on
+    # some builds that is a boot failure rather than a logged warning. The
+    # manifest and the XML are two files that must agree, which is exactly the
+    # kind of thing that silently drifts, so it is checked on every build.
+    if [ -x "$AAPT2" ] && [ -f "$XML" ]; then
+        want=$("$AAPT2" dump permissions "$APK" 2>/dev/null \
+               | sed -n "s/^uses-permission: name='\(android\.permission\.[A-Z_]*\)'/\1/p" \
+               | grep -E 'MODIFY_DEFAULT_AUDIO_EFFECTS|MODIFY_AUDIO_ROUTING|MODIFY_AUDIO_SETTINGS_PRIVILEGED' \
+               | sort -u)
+        have=$(grep -o 'android\.permission\.[A-Z_]*' "$XML" | sort -u)
+        missing=$(comm -23 <(echo "$want") <(echo "$have") || true)
+        if [ -n "$missing" ]; then
+            echo "!! privileged permissions requested by the APK but NOT allowlisted:"
+            echo "$missing" | sed 's/^/     /'
+            echo "   add them to $(basename "$XML") or the device may fail to boot"
+            exit 1
+        fi
+        echo ":: privapp allowlist consistent ($(echo "$want" | wc -w) privileged perms)"
+
+        # And the reverse: an allowlist entry for a permission the app no longer
+        # requests is harmless but means the files have drifted.
+        extra=$(comm -13 <(echo "$want") <(echo "$have") || true)
+        [ -n "$extra" ] && echo "   note: allowlisted but unused: $(echo "$extra" | tr '\n' ' ')"
+    fi
+
     mkdir -p "$STAGE/payload/priv-app/AliothLoud"
     cp -f "$APK" "$STAGE/payload/priv-app/AliothLoud/AliothLoud.apk"
-    echo ":: bundled app: $(basename "$APK")"
+    echo ":: bundled app: $(basename "$APK") ($(du -h "$APK" | cut -f1))"
 else
-    # No APK yet: drop the permissions payload too, otherwise we mount an
-    # allowlist for a package that isn't installed. Harmless, but noisy in
-    # logcat and confusing when debugging.
+    # No APK: drop the permissions payload too, otherwise we mount an allowlist
+    # for a package that is not installed. Harmless, but noisy in logcat and
+    # confusing when debugging.
     rm -rf "$STAGE/payload"
     echo ":: module only (no app bundled)"
 fi

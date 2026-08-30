@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      MODIFY_DEFAULT_AUDIO_EFFECTS is the one that matters. AudioFlinger's
+      createEffect() gates AUDIO_SESSION_OUTPUT_MIX (session 0) behind
+      modifyDefaultAudioEffectsAllowed(). It is signature|privileged, so it is
+      only granted when the module has installed this APK into
+      /system/priv-app AND shipped a privapp-permissions entry naming it.
+
+      Every permission listed here must appear in
+      module/payload/permissions/privapp-permissions-aliothloud.xml. Android
+      throws in PermissionManagerService for a priv-app requesting a
+      signature|privileged permission that is not allowlisted, and on some
+      builds that is a boot failure, so the two files must stay in sync.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_DEFAULT_AUDIO_EFFECTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_ROUTING"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS_PRIVILEGED"
+        tools:ignore="ProtectedPermissions" />
+
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:label="Alioth Loud"
+        android:icon="@android:drawable/ic_lock_silent_mode_off"
+        android:supportsRtl="true"
+        android:allowBackup="false"
+        android:theme="@style/Theme.AliothLoud">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="Alioth Loud">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".EngineService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <!-- Required from Android 14 when using the specialUse type. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Holds a global AudioEffect handle on session 0. The effect is
+                    destroyed if its owning process exits, so the process must stay
+                    resident for system-wide processing to remain active." />
+        </service>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

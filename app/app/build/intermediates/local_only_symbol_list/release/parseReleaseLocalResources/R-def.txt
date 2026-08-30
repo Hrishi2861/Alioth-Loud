@@ -1,0 +1,12 @@
+R_DEF: Internal format may change without notice
+local
+id availability
+id estimate
+id footer
+id master
+id presets
+id sliders
+id status
+layout activity_main
+string app_name
+style Theme.AliothLoud
