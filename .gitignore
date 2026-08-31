@@ -2,6 +2,9 @@ dist/
 .stage/
 probe/
 *.tar.gz
+*.zip
+IconKitchen-Output.zip
+alioth-cirrus*.txt
 
 # ---- Gradle / Android build artefacts
 #
