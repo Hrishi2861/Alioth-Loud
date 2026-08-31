@@ -1,69 +1,128 @@
-import math
+#!/usr/bin/env python3
+"""
+Verify the app's icon assets.
 
-# --- geometry copied verbatim from ic_launcher_foreground.xml -------------
-CONE = [(32,46),(43,46),(58,31),(58,77),(43,62),(32,62)]
-# SVG elliptical arcs: (start, end, radius, sweep)
-ARCS = [((66,42),(66,66),14,1),
-        ((75,33),(75,75),25,1)]
-SAFE = (18,18,90,90)          # 72x72 adaptive-icon safe zone
-STROKE = 5
+Run from the repo root:  python3 tools/verify_icon.py
 
-def arc_center(p1,p2,r,sweep):
-    (x1,y1),(x2,y2)=p1,p2
-    mx,my=(x1+x2)/2,(y1+y2)/2
-    dx,dy=x2-x1,y2-y1
-    d=math.hypot(dx,dy)/2
-    h2=r*r-d*d
-    if h2<0: raise SystemExit(f"IMPOSSIBLE ARC: r={r} too small for chord {d*2:.1f}")
-    h=math.sqrt(h2)
-    ux,uy=dx/(2*d),dy/(2*d)
-    px,py=-uy,ux                       # perpendicular
-    # For large-arc=0, the centre sits on the side OPPOSITE the bulge, which for
-    # sweep=1 (clockwise on a y-down canvas) is +perp where perp=(-uy,ux).
-    # Getting this backwards selects the major arc and reports phantom overflow.
-    s = 1 if sweep else -1
-    return (mx+s*h*px, my+s*h*py), h
+This replaces an earlier version that checked hand-written vector path geometry.
+The icons are now PNG artwork exported from IconKitchen, so the useful checks
+changed: instead of "is the geometry inside the safe zone", the questions are
+about the alpha channel, because that is what silently breaks.
 
-def in_poly(x,y,poly):
-    c=False; n=len(poly)
-    for i in range(n):
-        x1,y1=poly[i]; x2,y2=poly[(i+1)%n]
-        if (y1>y)!=(y2>y):
-            xi=x1+(y-y1)*(x2-x1)/(y2-y1)
-            if x<xi: c=not c
-    return c
+The three failure modes this catches, all of which produce a wrong-looking icon
+rather than a build error:
 
-def on_arc(x,y,p1,p2,r,sweep):
-    (cx,cy),_=arc_center(p1,p2,r,sweep)
-    if abs(math.hypot(x-cx,y-cy)-r)>STROKE/2: return False
-    a  = math.atan2(y-cy,x-cx)
-    a1 = math.atan2(p1[1]-cy,p1[0]-cx)
-    a2 = math.atan2(p2[1]-cy,p2[0]-cx)
-    # sweep=1 -> increasing angle from a1 to a2
-    span=(a2-a1)%(2*math.pi); rel=(a-a1)%(2*math.pi)
-    return rel<=span
+  1. Monochrome layer with an opaque background. Android's themed icons tint
+     every non-transparent pixel, so an opaque background renders the themed
+     icon as a solid filled blob instead of a speaker.
 
-print("foreground layer, '#'=cone  '*'=waves  '.'=safe-zone edge\n")
-minx=miny=999; maxx=maxy=-999
-for y in range(0,108,3):
-    row=""
-    for x in range(0,108,2):
-        ch=" "
-        if in_poly(x,y,CONE): ch="#"
+  2. Background layer that is NOT opaque. The launcher composites the background
+     under the foreground and applies its own mask; a transparent background
+     shows through to whatever is behind it.
+
+  3. A notification icon whose glyph is too small. Small icons are treated as an
+     alpha mask on a 24dp canvas; reusing the adaptive monochrome layer directly
+     gives ~40% fill, which looks like a tiny speaker in a big empty box. The
+     generated asset targets ~83%.
+
+Exit status is non-zero if any check fails, so this can gate a build.
+"""
+
+import os
+import sys
+
+try:
+    from PIL import Image
+except ImportError:
+    sys.exit("needs Pillow:  pip install Pillow")
+
+RES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                   "..", "app", "app", "src", "main", "res")
+
+DENSITIES = ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]
+
+# A notification glyph is generated at 83% fill. Allow a little slack for
+# rounding at 24px, but flag anything that has drifted far from the target.
+NOTIF_FILL_MIN = 0.70
+NOTIF_FILL_MAX = 0.95
+
+failures = []
+
+
+def check(cond, msg):
+    print(("  ok    " if cond else "  FAIL  ") + msg)
+    if not cond:
+        failures.append(msg)
+
+
+def alpha_stats(path):
+    im = Image.open(path).convert("RGBA")
+    a = im.split()[3]
+    w, h = im.size
+    bbox = a.getbbox()
+    corners = [a.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+    return im.size, bbox, corners, a
+
+
+def rel(p):
+    return os.path.relpath(p, os.path.join(os.path.dirname(RES), "..", "..", "..", ".."))
+
+
+print("adaptive launcher icon")
+for d in DENSITIES:
+    for layer in ("background", "foreground", "monochrome"):
+        p = os.path.join(RES, f"mipmap-{d}", f"ic_launcher_{layer}.png")
+        if not os.path.isfile(p):
+            check(False, f"mipmap-{d}/ic_launcher_{layer}.png missing")
+            continue
+        (w, h), bbox, corners, _ = alpha_stats(p)
+        if layer == "background":
+            # must be fully opaque, or the launcher shows through
+            check(all(c == 255 for c in corners),
+                  f"mipmap-{d}/ic_launcher_background.png opaque")
         else:
-            for a in ARCS:
-                if on_arc(x,y,*a): ch="*"; break
-        if ch!=" ":
-            minx=min(minx,x); maxx=max(maxx,x); miny=min(miny,y); maxy=max(maxy,y)
-        if ch==" " and (x in (SAFE[0],SAFE[2]) or y in (SAFE[1],SAFE[3])): ch="."
-        row+=ch
-    print(row)
+            # must have a transparent surround, or it composites/tints as a box
+            check(all(c == 0 for c in corners),
+                  f"mipmap-{d}/ic_launcher_{layer}.png transparent surround")
+        check(w == h, f"mipmap-{d}/ic_launcher_{layer}.png square ({w}x{h})")
 
-print(f"\nink bounds      x {minx}..{maxx}   y {miny}..{maxy}")
-print(f"safe zone       x {SAFE[0]}..{SAFE[2]}   y {SAFE[1]}..{SAFE[3]}")
-ok = minx>=SAFE[0] and maxx<=SAFE[2] and miny>=SAFE[1] and maxy<=SAFE[3]
-print("safe-zone fit   " + ("OK - nothing clips under a circular mask"
-                            if ok else "*** ARTWORK EXCEEDS SAFE ZONE ***"))
-for i,a in enumerate(ARCS):
-    (cx,cy),h = arc_center(*a)
-    print(f"arc {i+1}          centre ({cx:.1f},{cy:.1f})  bulges to x={cx+a[2]:.1f}")
+for f in ("ic_launcher.xml", "ic_launcher_round.xml"):
+    p = os.path.join(RES, "mipmap-anydpi-v26", f)
+    ok = os.path.isfile(p)
+    check(ok, f"mipmap-anydpi-v26/{f} present")
+    if ok:
+        body = open(p).read()
+        for layer in ("background", "foreground", "monochrome"):
+            check(f"@mipmap/ic_launcher_{layer}" in body,
+                  f"mipmap-anydpi-v26/{f} declares <{layer}>")
+
+# minSdk is 31 and 'anydpi' outranks every density qualifier, so a per-density
+# ic_launcher.png can never be selected. Its presence is dead weight (~64 KB).
+legacy = [d for d in DENSITIES
+          if os.path.isfile(os.path.join(RES, f"mipmap-{d}", "ic_launcher.png"))]
+check(not legacy,
+      "no unreachable legacy ic_launcher.png rasters"
+      + (f" (found in {', '.join(legacy)})" if legacy else ""))
+
+print("\nnotification icon")
+for d in DENSITIES:
+    p = os.path.join(RES, f"drawable-{d}", "ic_notification.png")
+    if not os.path.isfile(p):
+        check(False, f"drawable-{d}/ic_notification.png missing")
+        continue
+    (w, h), bbox, corners, a = alpha_stats(p)
+    check(all(c == 0 for c in corners),
+          f"drawable-{d}/ic_notification.png transparent surround")
+    if bbox:
+        fill = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) / max(w, h)
+        check(NOTIF_FILL_MIN <= fill <= NOTIF_FILL_MAX,
+              f"drawable-{d}/ic_notification.png glyph fill {fill:.0%} "
+              f"(want {NOTIF_FILL_MIN:.0%}-{NOTIF_FILL_MAX:.0%})")
+    else:
+        check(False, f"drawable-{d}/ic_notification.png is empty")
+
+print()
+if failures:
+    print(f":: {len(failures)} check(s) FAILED")
+    sys.exit(1)
+print(":: all icon checks passed")

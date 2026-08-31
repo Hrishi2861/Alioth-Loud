@@ -80,6 +80,22 @@ if [ "$WITH_APP" = 1 ]; then
     AAPT2="$BT/aapt2"; APKSIGNER="$BT/apksigner"
     XML="$MODULE/payload/permissions/privapp-permissions-aliothloud.xml"
 
+    # --- icon assets. These fail silently at runtime rather than at build time:
+    # a monochrome layer with an opaque background gives a solid blob for the
+    # themed icon, and a notification glyph at the adaptive layer's 40% fill
+    # looks like a speck in the status bar. Checked here so neither ships.
+    if python3 -c 'import PIL' 2>/dev/null; then
+        if python3 "$ROOT/tools/verify_icon.py" >/dev/null 2>&1; then
+            echo ":: icon assets ok"
+        else
+            echo "!! icon checks FAILED - refusing to build"
+            python3 "$ROOT/tools/verify_icon.py" | grep -E 'FAIL|failed' | sed 's/^/   /'
+            exit 1
+        fi
+    else
+        echo ":: icon checks skipped (no Pillow)"
+    fi
+
     # --- signature must be valid, or the priv-app simply will not install
     if [ -x "$APKSIGNER" ]; then
         "$APKSIGNER" verify "$APK" >/dev/null 2>&1 \

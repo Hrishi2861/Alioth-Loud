@@ -13,6 +13,7 @@ probe/
 # The APK is a build output. It is reproduced by `./build.sh --with-app` and
 # shipped inside dist/, which is already ignored.
 app/.gradle/
+app/.kotlin/
 app/build/
 app/app/build/
 app/local.properties

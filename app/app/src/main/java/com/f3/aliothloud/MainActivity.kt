@@ -61,9 +61,17 @@ class MainActivity : AppCompatActivity() {
         buildPresets()
         buildSliders()
 
-        master.isChecked = settings.enabled
         master.setOnCheckedChangeListener { _, on ->
             if (suppress) return@setOnCheckedChangeListener
+            if (!isPrivileged()) {
+                // Belt and braces: a disabled switch cannot be toggled, so this
+                // only trips if the UI somehow races a priv-app change. Refuse
+                // rather than start a chain that cannot work.
+                suppress = true
+                master.isChecked = false
+                suppress = false
+                return@setOnCheckedChangeListener
+            }
             settings.enabled = on
             setControlsEnabled(on)
             persistAndPush(restart = true)
@@ -71,12 +79,18 @@ class MainActivity : AppCompatActivity() {
 
         setControlsEnabled(settings.enabled)
         footerView.text = FOOTER
-        refresh()
+        // A switch that claims to boost audio but is physically unable to is
+        // worse than none, so it is locked off until the module's priv-app grant
+        // is actually present. Evaluate after the UI is built.
+        applyPrivilegeGate()
     }
 
     override fun onResume() {
         super.onResume()
-        refresh()
+        // The module may have been installed or removed while this was paused.
+        // If it was removed, the effect no longer works, so the master switch
+        // is locked back off and any stale "on" state is flushed.
+        applyPrivilegeGate()
     }
 
     // -----------------------------------------------------------------------
@@ -284,11 +298,44 @@ class MainActivity : AppCompatActivity() {
         statusView.postDelayed({ refresh() }, 350)
     }
 
-    private fun refresh() {
-        val r = EngineService.lastStatus
-        val privileged = ContextCompat.checkSelfPermission(
+    private fun isPrivileged(): Boolean =
+        ContextCompat.checkSelfPermission(
             this, "android.permission.MODIFY_DEFAULT_AUDIO_EFFECTS"
         ) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * The session-0 effect only reaches other apps' audio when this app holds
+     * MODIFY_DEFAULT_AUDIO_EFFECTS, a signature|privileged permission that the
+     * module grants by installing the app into /system/priv-app. Without it the
+     * engine cannot boost anything but this app's own audio, so enabling the
+     * master switch would promise loudness that never arrives. This gate keeps
+     * the whole control block locked off until the grant exists.
+     */
+    private fun applyPrivilegeGate() {
+        val privileged = isPrivileged()
+        if (privileged) {
+            master.isEnabled = true
+            refresh()
+            return
+        }
+        // Not privileged. Flush any persisted "on" so a stale enable cannot
+        // resurface after a reboot, and stop a chain that would run in vain.
+        suppress = true
+        if (settings.enabled) {
+            settings.enabled = false
+            prefs.save(settings)
+            EngineService.stop(this)
+        }
+        master.isChecked = false
+        master.isEnabled = false
+        suppress = false
+        setControlsEnabled(false)
+        refresh()
+    }
+
+    private fun refresh() {
+        val r = EngineService.lastStatus
+        val privileged = isPrivileged()
 
         statusView.text = buildString {
             append("privileged : ")
@@ -296,6 +343,9 @@ class MainActivity : AppCompatActivity() {
             append("\nengine     : ")
             append(if (settings.enabled) r.status.name else "off")
             if (r.detail.isNotEmpty() && settings.enabled) append("\ndetail     : ${r.detail}")
+            if (!privileged && !master.isEnabled) {
+                append("\naction     : install the module to enable the master switch")
+            }
         }
         availabilityView.text = engineProbe.describeAvailability()
     }
