@@ -160,9 +160,11 @@ class EngineService : Service() {
     private fun createChannel() {
         val nm = getSystemService(NotificationManager::class.java)
         val ch = NotificationChannel(
-            CHANNEL_ID, "Loudness engine", NotificationManager.IMPORTANCE_MIN
+            CHANNEL_ID,
+            getString(R.string.notif_channel),
+            NotificationManager.IMPORTANCE_MIN
         ).apply {
-            description = "Keeps the global audio effect attached"
+            description = getString(R.string.notif_channel_desc)
             setShowBadge(false)
         }
         nm.createNotificationChannel(ch)
@@ -174,9 +176,9 @@ class EngineService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val n: Notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Alioth Loud")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tap)
             .setOngoing(true)
             .build()

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Alioth Loud</string>
+    <string name="enable_processing">Enable loudness processing</string>
+    <string name="preset">Preset</string>
+    <string name="status_checking">checking\u2026</string>
+    <string name="preset_custom">Custom</string>
+    <string name="notif_channel">Loudness engine</string>
+    <string name="notif_channel_desc">Keeps the global audio effect attached</string>
 </resources>

@@ -3,6 +3,7 @@ package com.f3.aliothloud
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -22,6 +23,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
     private lateinit var availabilityView: TextView
     private lateinit var estimateView: TextView
+    private lateinit var presetLabel: TextView
+    private lateinit var presetGroup: ChipGroup
     private lateinit var footerView: TextView
     private lateinit var master: MaterialSwitch
     private lateinit var sliderHost: LinearLayout
@@ -39,21 +42,34 @@ class MainActivity : AppCompatActivity() {
         statusView = findViewById(R.id.status)
         availabilityView = findViewById(R.id.availability)
         estimateView = findViewById(R.id.estimate)
+        presetLabel = findViewById(R.id.presetLabel)
+        presetGroup = findViewById(R.id.presets)
         footerView = findViewById(R.id.footer)
         master = findViewById(R.id.master)
         sliderHost = findViewById(R.id.sliders)
 
+        // Everything below the master switch is only meaningful while
+        // processing is on, so it dims and stops accepting touches when it is
+        // off. Registered with its designed alpha so dimming is a scale of the
+        // intended value rather than a flat override -- the help text is
+        // already faint at 0.55 and must not end up brighter than its label.
+        registerDimmable(estimateView, 1f)
+        registerDimmable(presetLabel, 0.8f)
+        registerDimmable(presetGroup, 1f)
+
         requestNotificationsIfNeeded()
-        buildPresets(findViewById(R.id.presets))
+        buildPresets()
         buildSliders()
 
         master.isChecked = settings.enabled
         master.setOnCheckedChangeListener { _, on ->
             if (suppress) return@setOnCheckedChangeListener
             settings.enabled = on
+            setControlsEnabled(on)
             persistAndPush(restart = true)
         }
 
+        setControlsEnabled(settings.enabled)
         footerView.text = FOOTER
         refresh()
     }
@@ -64,10 +80,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     // -----------------------------------------------------------------------
+    // enable / disable
+    // -----------------------------------------------------------------------
+
+    private val dimmable = mutableListOf<Pair<View, Float>>()
+
+    private fun registerDimmable(v: View, normalAlpha: Float) {
+        dimmable += v to normalAlpha
+    }
+
+    /**
+     * Grey out and lock every control below the master switch.
+     *
+     * Two separate things have to happen and neither is sufficient alone:
+     * alpha makes it *look* unavailable, isEnabled makes it *be* unavailable.
+     * Dimming without disabling would leave working sliders that look dead,
+     * which is worse than no dimming at all.
+     *
+     * Chips are disabled individually. Disabling a ChipGroup does not propagate
+     * to its children, so the group would still hand touches to live chips.
+     */
+    private fun setControlsEnabled(on: Boolean) {
+        for ((v, normal) in dimmable) {
+            v.alpha = if (on) normal else normal * DISABLED_ALPHA_SCALE
+            v.isEnabled = on
+        }
+        for (i in 0 until presetGroup.childCount) {
+            presetGroup.getChildAt(i).isEnabled = on
+        }
+        sliderViews.forEach { (_, slider) -> slider.isEnabled = on }
+        updateLabels()
+    }
+
+    // -----------------------------------------------------------------------
     // presets
     // -----------------------------------------------------------------------
 
-    private fun buildPresets(group: ChipGroup) {
+    private fun buildPresets() {
         Settings.PRESETS.forEach { (name, preset) ->
             val chip = Chip(this).apply {
                 text = name
@@ -75,19 +124,40 @@ class MainActivity : AppCompatActivity() {
                 isChecked = name == prefs.presetName
                 setOnClickListener {
                     prefs.presetName = name
-                    // Preserve the master switch: picking a preset should not
-                    // silently turn processing on or off under the user.
+                    // A preset defines the shape of the processing, not whether
+                    // it runs. Picking one must not flip the master switch under
+                    // the user, so the enabled flag is carried across.
                     val wasEnabled = settings.enabled
                     settings.copyFrom(preset)
-                    settings.enabled = if (name == "Off") false else wasEnabled
-                    suppress = true
-                    master.isChecked = settings.enabled
-                    suppress = false
+                    settings.enabled = wasEnabled
                     rebuildSliderValues()
+                    updatePresetLabel()
                     persistAndPush(restart = true)
                 }
             }
-            group.addView(chip)
+            presetGroup.addView(chip)
+        }
+        updatePresetLabel()
+    }
+
+    /**
+     * Once a slider is touched the values no longer match any preset, so no chip
+     * should stay lit claiming otherwise. The header says "custom" instead.
+     */
+    private fun markCustom() {
+        if (prefs.presetName.isEmpty()) return
+        prefs.presetName = ""
+        // clearCheck() only affects checked state; the chips' click listeners
+        // are not invoked, so this cannot recurse back into markCustom().
+        presetGroup.clearCheck()
+        updatePresetLabel()
+    }
+
+    private fun updatePresetLabel() {
+        presetLabel.text = if (prefs.presetName.isEmpty()) {
+            "${getString(R.string.preset)}  \u00b7  ${getString(R.string.preset_custom).lowercase()}"
+        } else {
+            getString(R.string.preset)
         }
     }
 
@@ -145,7 +215,6 @@ class MainActivity : AppCompatActivity() {
             val help = TextView(this).apply {
                 text = spec.help
                 textSize = 10f
-                alpha = 0.55f
                 setPadding(0, 0, 0, dp(2))
             }
             val slider = Slider(this).apply {
@@ -160,6 +229,7 @@ class MainActivity : AppCompatActivity() {
                 addOnChangeListener { _, v, fromUser ->
                     if (!fromUser || suppress) return@addOnChangeListener
                     spec.set(settings, v)
+                    markCustom()
                     updateLabels()
                     // Live update, no teardown, so audio does not gap.
                     persistAndPush(restart = false)
@@ -170,6 +240,9 @@ class MainActivity : AppCompatActivity() {
             sliderHost.addView(slider)
             sliderViews += spec to slider
             valueLabels += label
+
+            registerDimmable(label, 1f)
+            registerDimmable(help, 0.55f)
         }
         updateLabels()
     }
@@ -189,8 +262,13 @@ class MainActivity : AppCompatActivity() {
             val shown = if (spec.step >= 1f) "%.0f".format(v) else "%.1f".format(v)
             valueLabels[i].text = "${spec.label}:  $shown ${spec.unit}"
         }
-        estimateView.text =
+        // Showing an estimated gain while processing is off would be a lie, so
+        // the switch state is reflected here rather than only in the dimming.
+        estimateView.text = if (settings.enabled) {
             "estimated  ~+%.0f dB perceived loudness".format(settings.estimatedLoudnessGainDb())
+        } else {
+            "processing off \u2014 stock output"
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -235,6 +313,14 @@ class MainActivity : AppCompatActivity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
+        /**
+         * Multiplier applied to a view's normal alpha when it is disabled.
+         * Material's disabled opacity is 0.38 absolute; as a scale factor this
+         * lands close to that for full-opacity views while keeping the already
+         * faint help text below its own label.
+         */
+        private const val DISABLED_ALPHA_SCALE = 0.4f
+
         private val FOOTER = """
             Layers 1-2 of alioth-loud. This is the only part that can exceed the
             stock maximum volume: the module's curve layer cannot, because stock

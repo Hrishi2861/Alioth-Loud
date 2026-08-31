@@ -71,10 +71,17 @@ data class Settings(
     }
 
     companion object {
-        /** Curated presets. Names describe the tradeoff, not a marketing tier. */
+        /**
+         * Curated presets. Names describe the tradeoff, not a marketing tier.
+         *
+         * There is deliberately no "Off" preset. On/off belongs to the master
+         * switch, which also greys these out, so an "Off" chip would be both a
+         * second control for the same state and unreachable at the moment it
+         * would be needed. The [enabled] field of each preset below is ignored
+         * for the same reason: applying a preset carries the current switch
+         * state across rather than overriding it.
+         */
         val PRESETS: Map<String, Settings> = linkedMapOf(
-            "Off" to Settings(enabled = false),
-
             // Barely-there dynamics control. Useful to verify the chain is
             // attached without changing the character of anything.
             "Transparent" to Settings(

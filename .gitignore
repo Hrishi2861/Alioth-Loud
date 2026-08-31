@@ -2,3 +2,30 @@ dist/
 .stage/
 probe/
 *.tar.gz
+
+# ---- Gradle / Android build artefacts
+#
+# These were tracked by accident. They are large, machine-specific, and churn on
+# every build: caches-jvm/*.tab, executionHistory.bin, merged_res/*.flat and the
+# APK itself. A single `assembleRelease` rewrote ~200 files, which buries real
+# source changes in `git status` and makes diffs useless.
+#
+# The APK is a build output. It is reproduced by `./build.sh --with-app` and
+# shipped inside dist/, which is already ignored.
+app/.gradle/
+app/build/
+app/app/build/
+app/local.properties
+.gradle/
+build/
+local.properties
+
+# ---- signing key
+#
+# Self-signed and only used to sign a module-installed priv-app, but a private
+# key still has no business in a repo. build.sh regenerates it if missing; note
+# that a new key changes the APK signature, so keep a backup if the app is
+# already installed on a device.
+app/keystore.jks
+*.jks
+*.keystore

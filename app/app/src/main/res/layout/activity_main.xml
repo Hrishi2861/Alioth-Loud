@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -13,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Alioth Loud"
+            android:text="@string/app_name"
             android:textSize="26sp"
             android:textStyle="bold" />
 
@@ -24,7 +25,7 @@
             android:layout_marginTop="6dp"
             android:textSize="13sp"
             android:fontFamily="monospace"
-            android:text="checking..." />
+            android:text="@string/status_checking" />
 
         <TextView
             android:id="@+id/availability"
@@ -41,7 +42,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:text="Enable loudness processing"
+            android:text="@string/enable_processing"
             android:textSize="17sp" />
 
         <TextView
@@ -55,10 +56,11 @@
             android:text="" />
 
         <TextView
+            android:id="@+id/presetLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:text="Preset"
+            android:text="@string/preset"
             android:textSize="13sp"
             android:textStyle="bold"
             android:alpha="0.8" />
@@ -68,8 +70,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            app:singleSelection="true"
-            xmlns:app="http://schemas.android.com/apk/res-auto" />
+            app:singleSelection="true" />
 
         <LinearLayout
             android:id="@+id/sliders"
