@@ -212,9 +212,12 @@ CIRRUS_WATCHDOG_SEC=0
 # and the vendor <postprocess> chain holds only volume-listener helpers, so a
 # global session-0 effect has a clean path with no vendor effect to fight.
 #
-# Installs the app as a priv-app and grants MODIFY_DEFAULT_AUDIO_EFFECTS, which
-# AudioFlinger requires to attach an effect to session 0. Without it the app
-# can only process its own audio, which boosts nothing.
+# The companion app is baked directly into the module overlay at build time as
+# a priv-app (system/priv-app) with an allowlist entry (system/etc/permissions)
+# granting MODIFY_DEFAULT_AUDIO_EFFECTS, which AudioFlinger requires to attach
+# an effect to session 0. Without it the app can only process its own audio,
+# which boosts nothing. Whether the app ships is decided at build time
+# (./build.sh --with-app), so this flag is informational only.
 INSTALL_PRIV_APP=1
 
 # ===========================================================================

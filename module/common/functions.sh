@@ -53,8 +53,10 @@ self_disable() {
     reason="$1"
     err "SELF-DISABLING: $reason"
     touch "$MODDIR/disable" 2>/dev/null
-    # Also strip the overlay so even a manual re-enable boots clean.
-    rm -rf "$MODDIR/system" 2>/dev/null
+    # Strip the boot-generated patch overlay so even a manual re-enable boots
+    # clean. The baked-in priv-app is left alone: it is only our own app, and
+    # removing it would require a re-install to bring back.
+    rm -rf "$MODDIR/system/vendor" "$MODDIR/system/product" "$MODDIR/system/system_ext" 2>/dev/null
     echo "$reason" >"$STATE_DIR/disabled-reason.txt"
 }
 

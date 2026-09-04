@@ -39,53 +39,24 @@ if [ "$strikes" -ge "$MAX_BOOT_STRIKES" ]; then
 fi
 
 # ===========================================================================
-# rebuild the overlay from scratch every boot
+# boot-generated overlay, rebuilt every boot
 # ===========================================================================
-# Stale overlay files are how config changes appear not to work and how a
-# ROM update ends up with a mismatched mixer_paths mounted over it.
-rm -rf "$MODDIR/system" 2>/dev/null
-mkdir -p "$MODDIR/system" 2>/dev/null
-
-# ===========================================================================
-# companion app as privileged system app
-# ===========================================================================
-# A normal APK cannot attach an effect to global session 0; it can only
-# process its own output. MODIFY_AUDIO_ROUTING is signature|privileged, so
-# the app has to live in priv-app with an explicit allowlist entry.
-install_priv_app() {
-    [ "${INSTALL_PRIV_APP:-0}" = "1" ] || { log "priv-app: disabled"; return 0; }
-    [ -d "$MODDIR/payload/priv-app" ] || { log "priv-app: no payload in this build"; return 0; }
-
-    cp -a "$MODDIR/payload/priv-app" "$MODDIR/system/priv-app" 2>/dev/null || {
-        warn "priv-app: copy failed"; return 1; }
-
-    mkdir -p "$MODDIR/system/etc/permissions" 2>/dev/null
-    [ -d "$MODDIR/payload/permissions" ] && \
-        cp -a "$MODDIR/payload/permissions/." "$MODDIR/system/etc/permissions/" 2>/dev/null
-
-    find "$MODDIR/system/priv-app" "$MODDIR/system/etc/permissions" \
-        -type d -exec chmod 0755 {} + 2>/dev/null
-    find "$MODDIR/system/priv-app" "$MODDIR/system/etc/permissions" \
-        -type f -exec chmod 0644 {} + 2>/dev/null
-    chown -R 0:0 "$MODDIR/system/priv-app" "$MODDIR/system/etc/permissions" 2>/dev/null
-
-    # SELinux label. Files under /system carry u:object_r:system_file:s0, and if
-    # the label is wrong PackageManager cannot scan the APK, so the app never
-    # appears and the effect layers look broken for a reason that has nothing to
-    # do with audio. Mirror the label from a real /system/priv-app entry rather
-    # than hardcoding it, falling back to system_file if that lookup fails.
-    ref=$(ls -d /system/priv-app/*/ 2>/dev/null | head -1)
-    ctx=""
-    [ -n "$ref" ] && ctx=$(ls -Zd "$ref" 2>/dev/null | awk '{print $1}')
-    case "$ctx" in
-        u:object_r:*) : ;;
-        *) ctx="u:object_r:system_file:s0" ;;
-    esac
-    chcon -R "$ctx" "$MODDIR/system/priv-app" 2>/dev/null
-    chcon -R "$ctx" "$MODDIR/system/etc/permissions" 2>/dev/null
-    log "priv-app: installed (ctx $ctx)"
-}
-install_priv_app
+# The priv-app and its allowlist are baked into the module archive at
+# $MODDIR/system/priv-app and $MODDIR/system/etc/permissions (BCR-style), so
+# the module manager mounts them on every boot and PackageManager always scans
+# them. They are NOT rebuilt here and must not be wiped.
+#
+# The device-dependent config patches live under system/vendor, system/product
+# and system/system_ext and ARE rebuilt each boot: stale overlay files are how
+# config changes appear not to work and how a ROM update ends up with a
+# mismatched mixer_paths mounted over it. Wipe only those roots, never the
+# statically-baked priv-app/allowlist.
+rm -rf "$MODDIR/system/vendor" \
+       "$MODDIR/system/product" \
+       "$MODDIR/system/system_ext" 2>/dev/null
+mkdir -p "$MODDIR/system/vendor/etc" \
+         "$MODDIR/system/product/etc" \
+         "$MODDIR/system/system_ext/etc" 2>/dev/null
 
 # ===========================================================================
 # patches

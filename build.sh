@@ -78,7 +78,7 @@ if [ "$WITH_APP" = 1 ]; then
 
     BT=$(ls -d /opt/android-sdk/build-tools/* 2>/dev/null | sort -V | tail -1)
     AAPT2="$BT/aapt2"; APKSIGNER="$BT/apksigner"
-    XML="$MODULE/payload/permissions/privapp-permissions-aliothloud.xml"
+    XML="$MODULE/system/etc/permissions/privapp-permissions-aliothloud.xml"
 
     # --- icon assets. These fail silently at runtime rather than at build time:
     # a monochrome layer with an opaque background gives a solid blob for the
@@ -131,14 +131,18 @@ if [ "$WITH_APP" = 1 ]; then
         [ -n "$extra" ] && echo "   note: allowlisted but unused: $(echo "$extra" | tr '\n' ' ')"
     fi
 
-    mkdir -p "$STAGE/payload/priv-app/AliothLoud"
-    cp -f "$APK" "$STAGE/payload/priv-app/AliothLoud/AliothLoud.apk"
+    # BCR-style: the APK is baked into the module's own system/ overlay, so the
+    # module manager (Magisk magic-mount / KernelSU overlayfs) mounts it and
+    # PackageManager scans it on every boot, no runtime copy needed.
+    mkdir -p "$STAGE/system/priv-app/AliothLoud"
+    cp -f "$APK" "$STAGE/system/priv-app/AliothLoud/AliothLoud.apk"
     echo ":: bundled app: $(basename "$APK") ($(du -h "$APK" | cut -f1))"
 else
-    # No APK: drop the permissions payload too, otherwise we mount an allowlist
-    # for a package that is not installed. Harmless, but noisy in logcat and
-    # confusing when debugging.
-    rm -rf "$STAGE/payload"
+    # No APK: drop the baked priv-app + allowlist, otherwise we mount an
+    # allowlist for a package that is not installed. Harmless, but noisy in
+    # logcat and confusing when debugging.
+    rm -rf "$STAGE/system/priv-app"
+    rm -f "$STAGE/system/etc/permissions/privapp-permissions-aliothloud.xml"
     echo ":: module only (no app bundled)"
 fi
 

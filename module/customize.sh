@@ -63,27 +63,20 @@ for pb in probe.sh probe_cirrus.sh; do
     [ -f "$MODPATH/tools/$pb" ] && set_perm "$MODPATH/tools/$pb" 0 0 0755
 done
 
-# ----------------------------------------------------- priv-app overlay base
-# Materialize the system overlay at INSTALL time, not only at boot. If it only
-# appears in post-fs-data.sh, whether PackageManager sees the app on the first
-# boot depends on the module manager mounting after that script runs: Magisk
-# does, but KernelSU (overlayfs/metamodule) can snapshot the module tree in a
-# way that misses an overlay created later, leaving a priv-app that never gets
-# scanned (no launcher icon, "install manually"). Shipping it here means the
-# overlay is part of the installed module from the start, whatever the manager.
-# post-fs-data.sh still rebuilds it afterwards, so it stays true to the live
-# device configs without depending on boot timing.
-if [ -d "$MODPATH/payload/priv-app" ]; then
-    mkdir -p "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions"
-    cp -a "$MODPATH/payload/priv-app/." "$MODPATH/system/priv-app/" 2>/dev/null
-    [ -d "$MODPATH/payload/permissions" ] && \
-        cp -a "$MODPATH/payload/permissions/." "$MODPATH/system/etc/permissions/" 2>/dev/null
+# ----------------------------------------------------- priv-app overlay
+# The app ships BCR-style: baked directly into `$MODPATH/system/priv-app` and
+# `$MODPATH/system/etc/permissions`, so the module manager mounts them on every
+# boot with no runtime copy and PackageManager always scans them. Nothing is
+# generated here -- just make sure the mounted priv-app has the attributes a
+# system scan needs. (SELinux labelling is handled by the manager, which applies
+# the system file contexts to the overlay at boot.)
+if [ -d "$MODPATH/system/priv-app" ]; then
     find "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions" \
         -type d -exec chmod 0755 {} + 2>/dev/null
     find "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions" \
         -type f -exec chmod 0644 {} + 2>/dev/null
     chown -R 0:0 "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions" 2>/dev/null
-    ui_print "- priv-app overlay staged at install (system/priv-app)"
+    ui_print "- priv-app baked into overlay (system/priv-app)"
 fi
 
 # ------------------------------------------------------------- what's on
@@ -93,7 +86,7 @@ ui_print "   [x] layer 3   curve flatten 0.55  (+12.7 dB at half vol)"
 ui_print "   [x] layer 3b  volume steps 30 -> 50"
 ui_print "   [ ] layer 4a  WCD RX gain    headset/earpiece only"
 ui_print "   [ ] layer 4b  CS35L41 amp    ~1-2 dB left in hardware"
-if [ -d "$MODPATH/payload/priv-app" ]; then
+if [ -d "$MODPATH/system/priv-app" ]; then
 ui_print "   [x] layers 1-2  Alioth Loud app (priv-app)"
 else
 ui_print "   [ ] layers 1-2  app not bundled in this zip"
