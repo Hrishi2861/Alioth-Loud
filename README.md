@@ -57,7 +57,9 @@ Every patch follows the same contract: **backup → transform → validate → m
 
 ## The companion app
 
-Installed by the module into `/system/priv-app` with a `privapp-permissions` allowlist — required because attaching an effect to the global output mix (session 0) is gated behind `MODIFY_DEFAULT_AUDIO_EFFECTS`, which is `signature|privileged`. Without it, the app could only process its own audio.
+On AOSP / stock ROMs the app is installed by the module into `/system/priv-app` with a `privapp-permissions` allowlist — required because attaching an effect to the global output mix (session 0) is gated behind `MODIFY_DEFAULT_AUDIO_EFFECTS`, which is `signature|privileged`. Without it, the app could only process its own audio.
+
+**On HyperOS the auto priv-app install is unreliable**, so HyperOS users should install the APK manually from GitHub Releases (see [Install](#install)). A manually-installed APK cannot hold the `signature|privileged` permission, so on HyperOS the app will show `privileged: NO` and the master switch stays locked — you still get the module's below-max volume boost, but not the app's global compression.
 
 It uses the framework **DynamicsProcessing** effect rather than shipping a `.so` — no vendor library, no `audio_effects.xml` patching, no SELinux label to get right, nothing for an OTA to revert, and it survives the Android 15 AIDL effect-HAL transition that is currently breaking ViPER4Android.
 
@@ -75,21 +77,34 @@ The build refuses to package if the test suites fail, shell syntax is off (modul
 
 ## Install
 
+### AOSP / stock ROMs (app installs automatically)
+
 1. Download the module zip from [**GitHub Releases**](../../releases) and flash it in Magisk / KernelSU / APatch (Android 12+).
-2. Reboot.
+2. Reboot — the app is installed into `/system/priv-app` automatically.
 3. Open **Alioth Loud**, confirm it says `privileged: yes`.
 4. Pick the **Loud** preset, then raise makeup gain to taste.
+
+### HyperOS (install the app manually)
+
+The priv-app auto-install is unreliable on HyperOS, so install the app yourself:
+
+1. Flash the **module zip** from [**GitHub Releases**](../../releases) in Magisk / KernelSU / APatch and reboot — this still applies the volume-curve boost (layers 3/3b).
+2. Download **`app-release.apk`** from [**GitHub Releases**](../../releases) and install it with a file manager (allow "install unknown apps" for that file manager if prompted).
+3. Open **Alioth Loud**.
+
+> ⚠️ **HyperOS caveat** — a manually-installed APK cannot hold the `signature|privileged` `MODIFY_DEFAULT_AUDIO_EFFECTS` permission, so the app will show **`privileged: NO`** and the **master switch stays locked** (global, system-wide compression is off). You still get the module's below-max volume boost and can use the app to inspect config — but only *actually installing the app as a privileged system app* (AOSP) unlocks the global compressor.
 
 Configuration lives at `/data/adb/alioth_loud/config.sh` and survives module updates; a probe script is copied to `/sdcard/probe.sh` so you can inspect your own device without a PC. Boot log: `/data/adb/alioth_loud/boot.log`.
 
 ## Repo layout
 
 ```
-module/           flashable Magisk module (POSIX sh + awk patchers)
-  common/         config, patch engine, bootloop guard, cirrus layer
-  payload/        priv-app APK + privapp-permissions allowlist
-app/              companion Android app (Kotlin, Views + Material)
-tools/            probe scripts, awk test suite, icon verification
+module/             flashable Magisk module (POSIX sh + awk patchers)
+  common/           config, patch engine, bootloop guard, cirrus layer
+  system/           privapp-permissions allowlist (baked into the overlay)
+app/                companion Android app (Kotlin, Views + Material)
+  app/build/outputs/apk/release/app-release.apk   release APK (GitHub Releases)
+tools/              probe scripts, awk test suite, icon verification
 ```
 
 ## License
