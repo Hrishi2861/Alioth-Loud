@@ -84,12 +84,10 @@ The build refuses to package if the test suites fail, shell syntax is off (modul
 3. Open **Alioth Loud**, confirm it says `privileged: yes`.
 4. Pick the **Loud** preset, then raise makeup gain to taste.
 
-### HyperOS (install the app manually)
+### HyperOS (manual install if it doesn't install automatically)
 
-The priv-app auto-install is unreliable on HyperOS, so install the app yourself:
-
-1. Flash the **module zip** from [**GitHub Releases**](../../releases) in Magisk / KernelSU / APatch and reboot — this still applies the volume-curve boost (layers 3/3b).
-2. Download **`app-release.apk`** from [**GitHub Releases**](../../releases) and install it with a file manager (allow "install unknown apps" for that file manager if prompted).
+1. Flash the **module zip** from [**GitHub Releases**](../../releases) in Magisk / KernelSU / APatch and reboot — this applies the volume-curve boost (layers 3/3b).
+2. Open **Alioth Loud**. On HyperOS the app may not install automatically; **if it isn't there**, download **`app-release.apk`** from [**GitHub Releases**](../../releases) and install it manually with a file manager (allow "install unknown apps" for that file manager if prompted).
 3. Open **Alioth Loud**.
 
 > ⚠️ **HyperOS caveat** — a manually-installed APK cannot hold the `signature|privileged` `MODIFY_DEFAULT_AUDIO_EFFECTS` permission, so the app will show **`privileged: NO`** and the **master switch stays locked** (global, system-wide compression is off). You still get the module's below-max volume boost and can use the app to inspect config — but only *actually installing the app as a privileged system app* (AOSP) unlocks the global compressor.
