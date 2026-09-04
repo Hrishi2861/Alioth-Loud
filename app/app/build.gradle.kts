@@ -13,8 +13,8 @@ android {
         // permission plumbing and foreground service types below assume 31+.
         minSdk = 31
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.2"   // kept in step with module.prop
+        versionCode = 6
+        versionName = "0.3.3"   // kept in step with module.prop
 
         // Only English strings are used, and the module ships this APK to one
         // device family. Dropping the other locales strips most of what makes
@@ -24,13 +24,16 @@ android {
 
     signingConfigs {
         create("release") {
-            // Self-signed. This APK is installed by the Magisk/KSU module into
-            // /system/priv-app, not through Play, so the key only needs to be
-            // stable across updates. build.sh generates it on first run.
-            storeFile = file("../keystore.jks")
-            storePassword = "aliothloud"
-            keyAlias = "aliothloud"
-            keyPassword = "aliothloud"
+            // Signed with the author's dedicated key. This APK is installed by
+            // the Magisk/KSU module into /system/priv-app, not through Play, so
+            // the key only needs to be stable across updates. Using a fixed
+            // external keystore (not a generated one) keeps the signature
+            // constant between debug and release and across rebuilds, so an
+            // existing install updates rather than triggering a package mismatch.
+            storeFile = file("/root/APK-Signature/hrishi.jks")
+            storePassword = "BGMIislove@123"
+            keyAlias = "key0"
+            keyPassword = "BGMIislove@123"
         }
     }
 

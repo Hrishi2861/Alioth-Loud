@@ -63,6 +63,29 @@ for pb in probe.sh probe_cirrus.sh; do
     [ -f "$MODPATH/tools/$pb" ] && set_perm "$MODPATH/tools/$pb" 0 0 0755
 done
 
+# ----------------------------------------------------- priv-app overlay base
+# Materialize the system overlay at INSTALL time, not only at boot. If it only
+# appears in post-fs-data.sh, whether PackageManager sees the app on the first
+# boot depends on the module manager mounting after that script runs: Magisk
+# does, but KernelSU (overlayfs/metamodule) can snapshot the module tree in a
+# way that misses an overlay created later, leaving a priv-app that never gets
+# scanned (no launcher icon, "install manually"). Shipping it here means the
+# overlay is part of the installed module from the start, whatever the manager.
+# post-fs-data.sh still rebuilds it afterwards, so it stays true to the live
+# device configs without depending on boot timing.
+if [ -d "$MODPATH/payload/priv-app" ]; then
+    mkdir -p "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions"
+    cp -a "$MODPATH/payload/priv-app/." "$MODPATH/system/priv-app/" 2>/dev/null
+    [ -d "$MODPATH/payload/permissions" ] && \
+        cp -a "$MODPATH/payload/permissions/." "$MODPATH/system/etc/permissions/" 2>/dev/null
+    find "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions" \
+        -type d -exec chmod 0755 {} + 2>/dev/null
+    find "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions" \
+        -type f -exec chmod 0644 {} + 2>/dev/null
+    chown -R 0:0 "$MODPATH/system/priv-app" "$MODPATH/system/etc/permissions" 2>/dev/null
+    ui_print "- priv-app overlay staged at install (system/priv-app)"
+fi
+
 # ------------------------------------------------------------- what's on
 ui_print " "
 ui_print "  enabled now:"
