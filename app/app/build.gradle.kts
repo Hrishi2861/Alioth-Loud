@@ -13,8 +13,8 @@ android {
         // permission plumbing and foreground service types below assume 31+.
         minSdk = 31
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.3.3"   // kept in step with module.prop
+        versionCode = 7
+        versionName = "0.3.4"   // kept in step with module.prop
 
         // Only English strings are used, and the module ships this APK to one
         // device family. Dropping the other locales strips most of what makes

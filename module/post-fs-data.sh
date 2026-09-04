@@ -39,6 +39,29 @@ if [ "$strikes" -ge "$MAX_BOOT_STRIKES" ]; then
 fi
 
 # ===========================================================================
+# companion app: clear stale PackageManager cache
+# ===========================================================================
+# PackageManager keeps a parsed copy of each apk in /data/system/package_cache.
+# On a device where the priv-app previously shipped an older APK, that cached
+# entry can have an mtime NEWER than the freshly-mounted apk, so PM serves the
+# STALE cached package instead of the mounted one: wrong version, no launcher
+# icon, and the app refuses to open (theme/app not found). The mounted apk on
+# disk is correct, but PM never re-reads it.
+#
+# This is exactly what BCR's ClearPackageManagerCaches does. Deleting the cache
+# entry here (post-fs-data runs before zygote/system_server parses priv-apps)
+# forces PM to re-parse the mounted apk on the next scan. It is a no-op on the
+# first clean install and harmless every time after.
+APP_ID="com.f3.aliothloud"
+if [ -d /data/system/package_cache ]; then
+    n=$(find /data/system/package_cache -maxdepth 1 -name "${APP_ID}-*" 2>/dev/null | wc -l)
+    if [ "$n" -gt 0 ]; then
+        find /data/system/package_cache -maxdepth 1 -name "${APP_ID}-*" -delete 2>/dev/null
+        log "priv-app: cleared $n stale PackageManager cache entry/ies for $APP_ID"
+    fi
+fi
+
+# ===========================================================================
 # boot-generated overlay, rebuilt every boot
 # ===========================================================================
 # The priv-app and its allowlist are baked into the module archive at
